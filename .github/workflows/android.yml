@@ -1,0 +1,74 @@
+
+name: Samaneh Ertebat APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check ZIP
+        run: |
+          set -e
+          test -f Samaneh-Ertebat-FULL-SOURCE.zip
+          unzip -t Samaneh-Ertebat-FULL-SOURCE.zip
+
+      - name: Extract project
+        id: project
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/source"
+          unzip -q Samaneh-Ertebat-FULL-SOURCE.zip -d "$RUNNER_TEMP/source"
+
+          FILE=$(find "$RUNNER_TEMP/source" -type f \( -name settings.gradle.kts -o -name settings.gradle \) | head -n 1)
+
+          if [ -z "$FILE" ]; then
+            echo "Android project not found"
+            exit 1
+          fi
+
+          DIR=$(dirname "$FILE")
+          test -f "$DIR/app/build.gradle.kts"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: |
+          gradle --no-daemon -p "${{ steps.project.outputs.dir }}" :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samaneh-Ertebat-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
