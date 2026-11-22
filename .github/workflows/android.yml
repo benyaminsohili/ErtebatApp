@@ -1,0 +1,63 @@
+
+name: Samaneh Ertebat Auto Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check ZIP
+        run: |
+          test -f Samaneh-Ertebat-FULL-SOURCE.zip
+          unzip -t Samaneh-Ertebat-FULL-SOURCE.zip
+
+      - name: Extract source
+        run: |
+          mkdir -p "$RUNNER_TEMP/source"
+          unzip -q Samaneh-Ertebat-FULL-SOURCE.zip -d "$RUNNER_TEMP/source"
+          FILE=$(find "$RUNNER_TEMP/source" -name settings.gradle.kts -o -name settings.gradle | head -n 1)
+          test -n "$FILE"
+          DIR=$(dirname "$FILE")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          test -f "$DIR/app/build.gradle.kts" || test -f "$DIR/app/build.gradle"
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle --no-daemon -p "$PROJECT_DIR" :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samaneh-Ertebat-APK
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
